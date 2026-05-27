@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>生成图标</title>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <script>
+    function createIcon(size) {
+      const canvas = document.getElementById('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+
+      // 背景渐变
+      const gradient = ctx.createLinearGradient(0, 0, size, size);
+      gradient.addColorStop(0, '#667eea');
+      gradient.addColorStop(1, '#764ba2');
+
+      // 绘制圆角矩形背景
+      const radius = size * 0.2;
+      ctx.beginPath();
+      ctx.moveTo(radius, 0);
+      ctx.lineTo(size - radius, 0);
+      ctx.quadraticCurveTo(size, 0, size, radius);
+      ctx.lineTo(size, size - radius);
+      ctx.quadraticCurveTo(size, size, size - radius, size);
+      ctx.lineTo(radius, size);
+      ctx.quadraticCurveTo(0, size, 0, size - radius);
+      ctx.lineTo(0, radius);
+      ctx.quadraticCurveTo(0, 0, radius, 0);
+      ctx.closePath();
+      ctx.fillStyle = gradient;
+      ctx.fill();
+
+      // 绘制WiFi图标
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = size * 0.06;
+      ctx.lineCap = 'round';
+
+      const centerX = size / 2;
+      const centerY = size * 0.6;
+
+      // WiFi弧线
+      for (let i = 3; i > 0; i--) {
+        const radius = size * 0.12 * i;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, -Math.PI * 0.75, -Math.PI * 0.25);
+        ctx.stroke();
+      }
+
+      // WiFi点
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, size * 0.05, 0, Math.PI * 2);
+      ctx.fillStyle = 'white';
+      ctx.fill();
+
+      // N字母
+      ctx.fillStyle = 'white';
+      ctx.font = `bold ${size * 0.25}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('N', centerX, size * 0.3);
+
+      return canvas.toDataURL('image/png');
+    }
+
+    // 生成并下载图标
+    [16, 48, 128].forEach(size => {
+      const dataUrl = createIcon(size);
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `icon${size}.png`;
+      a.click();
+    });
+
+    alert('图标已生成，请将下载的文件移动到 icons 文件夹');
+  </script>
+</body>
+</html>

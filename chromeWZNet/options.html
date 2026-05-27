@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>校园网自动登录 - 设置</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>校园网自动登录设置</h1>
+      <p>配置您的校园网账号和自动登录选项</p>
+    </div>
+
+    <div class="section">
+      <h2>账号管理</h2>
+      <div class="account-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="newName">账号名称</label>
+            <input type="text" id="newName" placeholder="例如：我的移动账号">
+          </div>
+          <div class="form-group">
+            <label for="newUsername">学号</label>
+            <input type="text" id="newUsername" placeholder="请输入学号">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="newPassword">密码</label>
+            <input type="password" id="newPassword" placeholder="请输入密码">
+          </div>
+          <div class="form-group">
+            <label for="newIsp">运营商</label>
+            <select id="newIsp">
+              <option value="-1">请选择运营商</option>
+              <option value="@telecom">中国电信</option>
+              <option value="@cmcc">中国移动</option>
+              <option value="@unicom">中国联通</option>
+              <option value="">校园宽带</option>
+            </select>
+          </div>
+        </div>
+        <button id="addAccountBtn" class="btn btn-primary">添加账号</button>
+      </div>
+
+      <div id="accountList" class="account-list">
+        <p class="empty-hint">暂无保存的账号</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>自动登录设置</h2>
+      <div class="settings-list">
+        <div class="setting-item">
+          <div class="setting-info">
+            <h3>启动时自动登录</h3>
+            <p>Chrome启动时自动检测并登录校园网</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="autoLogin" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <h3>断网自动重连</h3>
+            <p>检测到网络断开时自动重新登录</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="autoReconnect" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <h3>显示通知</h3>
+            <p>登录成功或失败时显示系统通知</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="showNotifications" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <h3>检测间隔</h3>
+            <p>网络状态检测的时间间隔（分钟）</p>
+          </div>
+          <input type="number" id="checkInterval" min="1" max="60" value="5" class="interval-input">
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>高级设置</h2>
+      <div class="settings-list">
+        <div class="setting-item">
+          <div class="setting-info">
+            <h3>登录服务器地址</h3>
+            <p>校园网认证服务器地址</p>
+          </div>
+          <input type="text" id="serverUrl" value="http://172.16.8.22" class="url-input">
+        </div>
+      </div>
+    </div>
+
+    <div class="button-group">
+      <button id="saveBtn" class="btn btn-primary">保存设置</button>
+      <button id="resetBtn" class="btn btn-secondary">恢复默认</button>
+      <button id="exportBtn" class="btn btn-secondary">导出配置</button>
+      <button id="importBtn" class="btn btn-secondary">导入配置</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <input type="file" id="importFile" accept=".json" style="display: none;">
+
+  <script src="options.js"></script>
+</body>
+</html>
