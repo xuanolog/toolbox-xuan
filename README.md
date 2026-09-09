@@ -18,3 +18,10 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 首次连接可能需要精确位置、附近 Wi-Fi 权限以及系统连接确认。只有在系统确认连到目标 SSID 后才发送认证请求。
 
 开发阶段安装调试 APK；最终版本和实测范围以 `docs/TESTING.md` 为准。仅本地 Git 管理，不自动创建远程仓库。
+
+- [安装与使用](docs/USAGE.md)
+- [测试记录与待验收项目](docs/TESTING.md)
+- [认证协议依据](docs/PROTOCOL.md)
+- [视觉资源来源](docs/ASSETS.md)
+
+提交检查后的源码后，可执行 `./scripts/package-debug.ps1` 构建并生成 `releases/` 下的 APK、源码提交号和 SHA-256 校验文件。发布目录不进入 Git；正式标签在现场验收后创建。
