@@ -12,7 +12,47 @@ import java.security.KeyStore
 
 @RunWith(AndroidJUnit4::class)
 class DeviceSmokeTest {
-    /** Emits only booleans: no profile contents, account, IP, MAC, URL or device identifiers. */
+    /** Opt-in controller check. Logs out once, never reads saved credentials or submits login. */
+    @Test fun logoutControllerCheck() = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("logoutProbe") == "true")
+        val wifi = WifiConnector(InstrumentationRegistry.getInstrumentation().targetContext)
+        try {
+            wifi.refresh()
+            val network = wifi.await("SZCU-313-5G", 30000) ?: error("Wi-Fi unavailable")
+            val session = NetworkPortalSession(network, "SZCU-313-5G", wifi)
+            session.inspect() // Fetch only terminal context; the school's online list may be empty while online.
+            session.logout()
+            assertFalse("Controller must show offline after logout", session.inspect().authenticated)
+        } finally { wifi.close() }
+    }
+
+    @Test fun sessionSourcesReadOnly() = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("sourcesProbe") == "true")
+        val wifi = WifiConnector(InstrumentationRegistry.getInstrumentation().targetContext)
+        try {
+            wifi.refresh()
+            val network = wifi.await("SZCU-313-5G", 30000) ?: error("Wi-Fi unavailable")
+            fun get(url: String): String {
+                val c = network.openConnection(java.net.URL(url), java.net.Proxy.NO_PROXY) as java.net.HttpURLConnection
+                try {
+                    c.connectTimeout = 5000; c.readTimeout = 5000; c.useCaches = false; c.instanceFollowRedirects = false
+                    return PortalEncoding.decode(c.inputStream.use { it.readBytes() }, c.contentType, true)
+                } finally { c.disconnect() }
+            }
+            val root = get(PortalProtocol.ROOT)
+            val ctx = PortalProtocol.parseContext(root, wifi.ip(network)!!)
+            val summaries = mutableListOf("successMarker=${SessionProtocol.isSuccessPage(root)} logoutTitle=${org.jsoup.Jsoup.parse(root).title().contains("注销")} loginTitle=${org.jsoup.Jsoup.parse(root).title().contains("登录")}")
+            for ((name, url) in listOf("radius" to SessionProtocol.statusUrl(ctx, "dr1001", 777), "kernel" to "http://172.16.8.22/drcom/chkstatus?callback=dr1001")) {
+                val body = get(url)
+                val obj = com.google.gson.JsonParser.parseString(body.substringAfter('(').substringBeforeLast(')')).asJsonObject
+                val list = obj.get("list")?.takeIf { it.isJsonArray }?.asJsonArray
+                summaries += "$name result=${obj.get("result")?.asString?.takeIf { it in listOf("0", "1", "ok") }} listCount=${list?.size()} matched=${list?.count { it.asJsonObject.get("online_ip")?.asString == ctx.ip }} uidPresent=${obj.has("uid")} offlineMessage=${obj.get("msg")?.asString == "在线数据为空"}"
+            }
+            InstrumentationRegistry.getInstrumentation().sendStatus(0, android.os.Bundle().apply { putString("stream", summaries.joinToString("\n") + "\n") })
+        } finally { wifi.close() }
+    }
+
+    /** No login/logout. Emits booleans only and asks Android to reevaluate connectivity. */
     @Test fun campusSessionReadOnly() = runBlocking {
         val args = InstrumentationRegistry.getArguments()
         assumeTrue("Explicit session probe not requested", args.getString("sessionProbe") == "true")
@@ -23,9 +63,11 @@ class DeviceSmokeTest {
             val session = NetworkPortalSession(network, "SZCU-313-5G", wifi)
             val state = session.inspect()
             val reachable = session.online()
+            val verified = session.verify()
+            val suggestionsCleared = !wifi.hasLegacySuggestions()
             val defaultCaps = wifi.connectivity.getNetworkCapabilities(wifi.connectivity.activeNetwork)
             val result = android.os.Bundle().apply {
-                putString("stream", "SESSION_PROBE authenticated=${state.authenticated} identityAvailable=${state.account != null} wifiProbe=$reachable wifiValidated=${wifi.validated(network)} defaultCellular=${defaultCaps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true}\n")
+                putString("stream", "SESSION_PROBE authenticated=${state.authenticated} identityAvailable=${state.account != null} wifiProbe=$reachable verified=$verified suggestionsCleared=$suggestionsCleared wifiValidated=${wifi.validated(network)} defaultCellular=${defaultCaps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true}\n")
             }
             InstrumentationRegistry.getInstrumentation().sendStatus(0, result)
         } finally { wifi.close() }

@@ -4,6 +4,20 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SessionProtocolTest {
+    @Test fun successPageOverridesIncorrectOfflineRadiusReply() {
+        val merged = SessionProtocol.resolveStatus(CampusSession(false), true)
+        assertTrue(merged.authenticated); assertNull(merged.account)
+    }
+    @Test fun logoutRequiresBothPageAndRadiusOffline() {
+        assertFalse(SessionProtocol.resolveStatus(CampusSession(false), false).authenticated)
+        assertTrue(SessionProtocol.resolveStatus(CampusSession(true, "student0001@telecom"), false).authenticated)
+    }
+    @Test fun pageDoesNotEraseReliableRadiusIdentity() {
+        val state = CampusSession(true, "student0001@telecom")
+        assertEquals(state, SessionProtocol.resolveStatus(state, true))
+        assertTrue(SessionProtocol.isSuccessPage("<!-- Dr.COMWebLoginID_3.htm -->"))
+        assertFalse(SessionProtocol.isSuccessPage("<title>上网登录页</title>"))
+    }
     private val ip = "192.0.2.9"
     @Test fun matchesOnlyCurrentIpInOnlineList() {
         val body = """dr1001({"result":1,"list":[{"online_ip":"192.0.2.8","user_account":"other@unicom"},{"online_ip":"192.0.2.9","user_account":"student0001@telecom"}]});"""

@@ -212,7 +212,7 @@ private fun maskAccount(account: String) = if (account.length < 5) "••••
             if (busy) { CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = Pink); Spacer(Modifier.width(10.dp)) }
             Text(status.stage.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (good) Mint else Peach)
         }
-        Text(status.detail, fontSize = 12.sp, color = Muted, lineHeight = 20.sp, modifier = Modifier.padding(top = 7.dp))
+        Text(status.detail, fontSize = 12.sp, color = if (good) Mint else Muted, lineHeight = 20.sp, modifier = Modifier.padding(top = 7.dp))
     }
 }
 @Composable private fun Notice(text: String?, dismiss: (String?) -> Unit) {

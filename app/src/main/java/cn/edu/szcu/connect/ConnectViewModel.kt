@@ -16,7 +16,6 @@ import kotlinx.coroutines.withContext
 import java.net.SocketTimeoutException
 
 sealed interface WifiAction {
-    data class SaveNetwork(val ssid: String) : WifiAction
     data object Panel : WifiAction
 }
 data class AppState(val book: ProfileBook = ProfileBook(), val status: ConnectionStatus = ConnectionStatus(),
@@ -37,6 +36,7 @@ class ConnectViewModel(app: Application) : AndroidViewModel(app) {
             catch (_: Exception) { mutable.update { it.copy(loading = false, vaultError = true, notice = "无法解密已有配置。为保护原文件，已暂停编辑，请勿清除应用数据。") } }
         }
         wifi.refresh()
+        if (!wifi.removeLegacySuggestions()) notice("旧版自动连接建议未能移除，请稍后重新打开应用重试")
     }
     fun notice(text: String?) { mutable.update { it.copy(notice = text) } }
     private fun persist(book: ProfileBook, done: () -> Unit = {}) {
@@ -75,12 +75,8 @@ class ConnectViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 var network = wifi.find(profile.ssid)
                 if (network == null) {
-                    wifi.suggest(profile.ssid)
-                    network = wifi.await(profile.ssid, 5000)
-                }
-                if (network == null) {
-                    mutable.update { it.copy(status = ConnectionStatus(Stage.WAITING_WIFI, "请允许系统保存网络；如未自动连接，在 WLAN 面板选择 ${profile.ssid}，返回后将自动继续")) }
-                    actions.send(WifiAction.SaveNetwork(profile.ssid))
+                    mutable.update { it.copy(status = ConnectionStatus(Stage.WAITING_WIFI, "请在 WLAN 面板选择 ${profile.ssid}，连接后返回，应用将继续认证")) }
+                    actions.send(WifiAction.Panel)
                     network = wifi.await(profile.ssid, 90000)
                 }
                 if (network != null && wifi.ip(network) == null) network = wifi.await(profile.ssid, 15000)
@@ -104,10 +100,6 @@ class ConnectViewModel(app: Application) : AndroidViewModel(app) {
         operation?.cancel()
         // busy stays true until the previous job releases its resources, preventing a cancel/restart race.
         mutable.update { it.copy(status = ConnectionStatus(Stage.CANCELLED, "已停止后续认证请求；已发送的请求无法撤回，Wi-Fi 保持连接")) }
-    }
-    fun afterSaveNetwork() {
-        val selected = mutable.value.book.profiles.find { it.id == mutable.value.book.selectedId }
-        if (mutable.value.busy && selected != null && wifi.find(selected.ssid) == null) openPanel()
     }
     fun openPanel() { viewModelScope.launch { actions.send(WifiAction.Panel) } }
     override fun onCleared() { wifi.close(); super.onCleared() }

@@ -15,7 +15,8 @@ class ConnectionEngineTest {
         var finalOnline = true
         var connected = true
         var reply = PortalReply(true, "ok")
-        override suspend fun online() = true
+        var reachable = false
+        override suspend fun online() = reachable
         override suspend fun verify(): Boolean { events += "verify"; return finalOnline }
         override suspend fun inspect(): CampusSession { events += "inspect"; return state }
         override suspend fun logout() { events += "logout"; state = CampusSession(false) }
@@ -24,9 +25,9 @@ class ConnectionEngineTest {
         override fun checkNetwork() { if (!connected) throw PortalException("网络已切换") }
     }
     @Test fun reachableProbeNeverBypassesAuthentication() = runTest {
-        val fake = FakeSession(); var last = Stage.IDLE
+        val fake = FakeSession().apply { reachable = true }; var last = Stage.IDLE
         ConnectionEngine().run(profile, fake) { last = it.stage }
-        assertEquals(listOf("inspect", "context", "login", "verify"), fake.events)
+        assertEquals(listOf("inspect", "logout", "inspect", "context", "login", "verify"), fake.events)
         assertEquals(Stage.CONNECTED, last)
     }
     @Test fun sameAccountSkipsLogoutAndLogin() = runTest {

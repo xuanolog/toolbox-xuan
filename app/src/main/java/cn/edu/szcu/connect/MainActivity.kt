@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.net.Uri
-import android.net.wifi.WifiNetworkSuggestion
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -27,7 +26,6 @@ class MainActivity : ComponentActivity() {
         model.wifi.refresh()
         if (hasPermissions()) connectWithLocation() else model.notice("请允许精确位置与附近 Wi-Fi 权限，才能确认目标网络。可在系统应用权限中重新设置。")
     }
-    private val saveNetwork = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { model.afterSaveNetwork() }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
@@ -38,10 +36,6 @@ class MainActivity : ComponentActivity() {
                 model.wifiActions.collect { action ->
                     try {
                         when (action) {
-                            is WifiAction.SaveNetwork -> {
-                                if (model.state.value.busy) saveNetwork.launch(Intent(Settings.ACTION_WIFI_ADD_NETWORKS).putParcelableArrayListExtra(
-                                    Settings.EXTRA_WIFI_NETWORK_LIST, arrayListOf(WifiNetworkSuggestion.Builder().setSsid(action.ssid).build())))
-                            }
                             WifiAction.Panel -> startActivity(Intent(Settings.Panel.ACTION_WIFI))
                         }
                     } catch (_: Exception) {

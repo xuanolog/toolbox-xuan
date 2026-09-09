@@ -21,6 +21,8 @@ class NetworkPortalSession(private val network: Network, private val ssid: Strin
     companion object { private val executor = Executors.newFixedThreadPool(3) }
     private val initialIp = wifi.ip(network) ?: throw PortalException("Wi-Fi 尚未获得 IPv4 地址")
     private var sessionContext: PortalContext? = null
+    private var pageAuthenticated = false
+    private var loginAccepted = false
     override fun checkNetwork() {
         if (!wifi.matches(network, ssid)) throw PortalException("目标 Wi-Fi 已断开或发生切换，已停止认证")
         if (wifi.ip(network) != initialIp) throw PortalException("Wi-Fi 地址发生变化，已停止认证，请重试")
@@ -69,36 +71,40 @@ class NetworkPortalSession(private val network: Network, private val ssid: Strin
     }
 
     override suspend fun online(): Boolean {
-        // TLS + exact 204 prevents a captive HTTP redirect or cellular fallback being treated as success.
-        for (url in listOf("https://connect.rom.miui.com/generate_204", "https://connectivitycheck.gstatic.com/generate_204")) {
-            currentCoroutineContext().ensureActive()
-            try { if (get(url, 4000).code == 204) { checkNetwork(); return true } }
-            catch (e: CancellationException) { throw e }
-            catch (_: Exception) { /* Try the second independent HTTPS endpoint. */ }
-        }
-        return false
+        // Probe the actual external site the user expects, not OS endpoints often allowed before login.
+        currentCoroutineContext().ensureActive()
+        return try {
+            val response = get("https://www.baidu.com/", 5000)
+            checkNetwork()
+            response.code == 200 && response.body.contains("baidu.com", ignoreCase = true)
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { checkNetwork(); false }
     }
 
     override suspend fun verify(): Boolean = NetworkVerifier().verify(
         probe = ::online,
         authenticated = {
-            try { inspect().authenticated }
+            try { loginAccepted || inspect().authenticated }
             catch (e: CancellationException) { throw e }
             catch (_: Exception) { checkNetwork(); false }
         },
-        validated = { wifi.validated(network) },
         reevaluate = { wifi.reevaluate(network, it) },
         checkNetwork = ::checkNetwork,
     )
 
     override suspend fun inspect(): CampusSession {
         val ctx = loadContext()
+        val pageSuccess = pageAuthenticated
         val callback = "dr" + Random.nextInt(1000, 999999)
-        val response = get(SessionProtocol.statusUrl(ctx, callback, Random.nextInt(500, 10500)))
-        if (response.code != 200) throw PortalException("校园会话查询失败，已停止操作")
-        checkNetwork()
         sessionContext = ctx
-        return SessionProtocol.parseStatus(response.body, callback, ctx.ip)
+        val status = try {
+            val response = get(SessionProtocol.statusUrl(ctx, callback, Random.nextInt(500, 10500)))
+            if (response.code != 200) throw PortalException("校园会话查询失败，已停止操作")
+            SessionProtocol.parseStatus(response.body, callback, ctx.ip)
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { if (pageSuccess) CampusSession(true) else throw e }
+        checkNetwork()
+        return SessionProtocol.resolveStatus(status, pageSuccess)
     }
 
     override suspend fun logout() {
@@ -115,8 +121,13 @@ class NetworkPortalSession(private val network: Network, private val ssid: Strin
         if (response.code != 200 || !PortalProtocol.parseReply(response.body, callback).success)
             throw PortalException("校园注销未成功，已停止登录，请检查校园网页")
         sessionContext = null
-        // Give the access controller a bounded interval to apply logout before checking it.
-        kotlinx.coroutines.delay(1000)
+        loginAccepted = false
+        // Require both a login page and an offline list after the controller has applied logout.
+        repeat(3) {
+            kotlinx.coroutines.delay(1000)
+            if (!inspect().authenticated) return
+        }
+        throw PortalException("注销请求已发送，但校园网页仍显示在线；已停止提交新账号，请稍后重试")
     }
 
     override suspend fun readContext(): PortalContext = loadContext()
@@ -125,7 +136,7 @@ class NetworkPortalSession(private val network: Network, private val ssid: Strin
         checkNetwork()
         val root = get(PortalProtocol.ROOT)
         if (root.code != 200) throw PortalException("校园认证入口不可用，请打开登录页检查")
-        // The online-list query decides session state; a success-page shell can outlive logout.
+        pageAuthenticated = SessionProtocol.isSuccessPage(root.body)
         val ip = wifi.ip(network) ?: throw PortalException("Wi-Fi 尚未获得 IPv4 地址")
         // Version is a protocol version, not the cache-busting timestamp in fileVersion.
         val bootstrap = get(PortalProtocol.ROOT + "a41.js")
@@ -154,6 +165,6 @@ class NetworkPortalSession(private val network: Network, private val ssid: Strin
         check(PortalProtocol.trusted(url))
         val response = get(url)
         if (response.code != 200) throw PortalException("认证接口不可用或发生重定向；未向其他地址发送密码")
-        return PortalProtocol.parseReply(response.body, callback)
+        return PortalProtocol.parseReply(response.body, callback).also { loginAccepted = it.success }
     }
 }

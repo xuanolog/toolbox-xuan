@@ -5,6 +5,10 @@ import com.google.gson.JsonParser
 import java.net.URLEncoder
 
 object SessionProtocol {
+    fun isSuccessPage(html: String): Boolean = Regex("<!--\\s*Dr\\.COMWebLoginID_3\\.htm\\s*-->").containsMatchIn(html)
+    fun resolveStatus(status: CampusSession, successPage: Boolean): CampusSession =
+        if (successPage && !status.authenticated) CampusSession(true) else status
+
     private fun url(action: String, ctx: PortalContext, callback: String, nonce: Int, logout: Boolean): String {
         require(callback.matches(Regex("dr[0-9]+")))
         val params = linkedMapOf("callback" to callback, "user_account" to "drcom", "user_password" to "123",

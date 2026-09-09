@@ -8,7 +8,6 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
-import android.net.wifi.WifiNetworkSuggestion
 import android.os.Build
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -84,10 +83,18 @@ class WifiConnector(context: Context) {
     }
 
     @SuppressLint("MissingPermission")
-    fun suggest(ssid: String) {
-        // Persistent system suggestions: removing/closing this app must not tear down a network request.
-        runCatching { wifi.addNetworkSuggestions(listOf(WifiNetworkSuggestion.Builder().setSsid(ssid).build())) }
+    fun removeLegacySuggestions(): Boolean {
+        // Only remove this application's suggestions. The OS may release their connection afterwards.
+        return runCatching {
+            if (wifi.networkSuggestions.isEmpty()) return@runCatching true
+            val result = if (Build.VERSION.SDK_INT >= 33)
+                wifi.removeNetworkSuggestions(emptyList(), WifiManager.ACTION_REMOVE_SUGGESTION_LINGER)
+            else wifi.removeNetworkSuggestions(emptyList())
+            result == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS
+        }.getOrDefault(false)
     }
+    @SuppressLint("MissingPermission")
+    fun hasLegacySuggestions(): Boolean = wifi.networkSuggestions.isNotEmpty()
     suspend fun await(ssid: String, timeoutMs: Long): Network? = withTimeoutOrNull(timeoutMs) {
         var found = find(ssid)
         while (found == null || ip(found) == null) { delay(300); found = find(ssid) }

@@ -1,5 +1,16 @@
 # 校园网认证适配依据
 
+## v0.1.2 修正
+
+实机出现 RADIUS `online_list` 和内核 `chkstatus` 均返回离线，但目标 Wi-Fi 的百度 HTTPS 请求可达的情况。在线列表不能作为唯一登录状态来源；页面脚本中的 `authsuccess='Dr.COMWebLoginID_3.htm'` 也只是通用配置，不能因为字符串出现就认为当前页面已登录。仅完整 HTML 成功页注释可作为补充证据。
+
+- 查询不到账号但目标 Wi-Fi 可访问百度时，视为可能存在未知会话：在显式点击连接后先注销，再登录所选账号，不能跳过认证。
+- 本次登录接口已经返回成功时，保留当前操作内的成功结果；后续空在线列表不再推翻该结果。目标 Wi-Fi 的百度 HTTPS 200 且页面包含百度域名标识后显示绿色成功。网络/IP 变化仍会停止操作；Android VALIDATED 只作诊断信号，不作为成功的硬性门槛。
+- 注销成功后最多三次间隔一秒重新检查，仍在线则停止新账号提交；不重试密码。查询到同一账号及运营商时仍可免注销。
+- 移除 `addNetworkSuggestions` 与 `ACTION_WIFI_ADD_NETWORKS` 路径，启动时仅清理本应用旧建议；需要切换 Wi-Fi 时直接使用系统 WLAN 面板。Android 13+ 使用 LINGER 清理选项，但系统仍可能在之后释放仅由建议维持的连接；不保证清理后保持该连接。
+
+下节保留 v0.1.1 协议调查依据，其“在线列表与系统验证均须通过”的成功判定已由本节替换。
+
 ## v0.1.1 会话查询与注销
 
 2026-09-09 直接只读下载校园服务器的 `a41.js`、`a42.js`、`3.htm` 与 `WZXY/ip/2/mobile_31.js`，核实模板按钮 `wc()` → 确认后 `exit()` → `logout.init()` → `logout.logout_portal()` → `logout.portal_logout()`。本次设置为 `acLogout=1`、`registerMode=1`、`checkOnlineMethod=1`、`unBindmac=0`；不实现解除 MAC 绑定。

@@ -36,7 +36,12 @@ class ConnectionEngine {
         currentCoroutineContext().ensureActive()
         session.checkNetwork()
         val sameAccount = existing.matches(profile)
-        if (existing.authenticated && !sameAccount) {
+        // The school's list can be empty even when this Wi-Fi has Internet access.
+        // Treat that as an unknown existing session to reset, never as a reason to skip login.
+        val possiblyOnline = existing.authenticated || session.online()
+        currentCoroutineContext().ensureActive()
+        session.checkNetwork()
+        if (possiblyOnline && !sameAccount) {
             status(Stage.LOGOUT, "正在退出原账号，完成后登录所选配置")
             session.logout()
             currentCoroutineContext().ensureActive()
@@ -63,7 +68,7 @@ class ConnectionEngine {
         val online = session.verify()
         currentCoroutineContext().ensureActive()
         session.checkNetwork()
-        if (online) status(if (sameAccount) Stage.ALREADY else Stage.CONNECTED, "所选账号已认证，Wi-Fi 外网与系统联网检查均已通过")
-        else status(Stage.LIMITED, "认证已通过，网络状态待确认；Wi-Fi 外网探测或系统检查尚未通过，请稍后再检查")
+        if (online) status(if (sameAccount) Stage.ALREADY else Stage.CONNECTED, "校园网认证已通过，已通过目标 Wi-Fi 访问百度，可以正常上网")
+        else status(Stage.LIMITED, "认证已通过，但暂未能通过目标 Wi-Fi 访问百度，请稍后检查")
     }
 }

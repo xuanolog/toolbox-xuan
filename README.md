@@ -17,11 +17,11 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 首次连接可能需要精确位置、附近 Wi-Fi 权限以及系统连接确认。只有在系统确认连到目标 SSID 后才发送认证请求。
 
-当前开发交付版本 `v0.1.1`，增加先注销后切换账号及校园会话、Wi-Fi 外网、系统联网状态联合验证。`v0.1.0` 已在小米 Android 16 / HyperOS 3.0 完成中国电信真实登录；新版验收状态见测试记录。交付为调试签名 APK；其他运营商及完整兼容矩阵以 `docs/TESTING.md` 为准。仅本地 Git 管理，不自动创建远程仓库。
+当前开发交付版本 `v0.1.2`，移除自动连接建议，修正学校在线列表不可靠时的注销流程，并通过 Wi-Fi 实际访问百度后显示绿色成功。`v0.1.0` 已在小米 Android 16 / HyperOS 3.0 完成中国电信真实登录；新版验收状态见测试记录。交付为调试签名 APK；其他运营商及完整兼容矩阵以 `docs/TESTING.md` 为准。仅本地 Git 管理，不自动创建远程仓库。
 
 - [安装与使用](docs/USAGE.md)
 - [测试记录与待验收项目](docs/TESTING.md)
 - [认证协议依据](docs/PROTOCOL.md)
 - [视觉资源来源](docs/ASSETS.md)
 
-提交检查后的源码后，可执行 `./scripts/package-debug.ps1 -Label 0.1.1` 构建并生成 `releases/` 下的 APK、源码提交号和 SHA-256 校验文件。发布目录不进入 Git；正式标签在现场验收后创建。
+提交检查后的源码后，可执行 `./scripts/package-debug.ps1 -Label 0.1.2` 构建并生成 `releases/` 下的 APK、源码提交号和 SHA-256 校验文件。发布目录不进入 Git；正式标签在现场验收后创建。

@@ -10,7 +10,6 @@ class NetworkVerifier {
     suspend fun verify(
         probe: suspend () -> Boolean,
         authenticated: suspend () -> Boolean,
-        validated: () -> Boolean,
         reevaluate: (Boolean) -> Unit,
         checkNetwork: () -> Unit,
     ): Boolean = withTimeoutOrNull(30_000) {
@@ -24,7 +23,7 @@ class NetworkVerifier {
             val sessionConfirmed = if (reachable) authenticated() else false
             currentCoroutineContext().ensureActive()
             checkNetwork()
-            if (reachable && sessionConfirmed && validated()) return@withTimeoutOrNull true
+            if (reachable && sessionConfirmed) return@withTimeoutOrNull true
             if (attempt < 2) delay(2000)
         }
         false
