@@ -23,13 +23,15 @@ class NetworkPortalSession(private val network: Network, private val ssid: Strin
     private var sessionContext: PortalContext? = null
     private var pageAuthenticated = false
     private var loginAccepted = false
+    private val cookies = PortalCookies()
+    private var portalInitialized = false
     override fun checkNetwork() {
         if (!wifi.matches(network, ssid)) throw PortalException("目标 Wi-Fi 已断开或发生切换，已停止认证")
         if (wifi.ip(network) != initialIp) throw PortalException("Wi-Fi 地址发生变化，已停止认证，请重试")
     }
     private data class Response(val code: Int, val body: String)
 
-    /** No default-network sockets, proxy, cookies, redirects, request logging, or cache. */
+    /** Wi-Fi sockets only; scoped school cookies, no proxy, redirects, request logging or cache. */
     private suspend fun get(url: String, timeout: Int = 8000): Response = suspendCancellableCoroutine { continuation ->
         val active = AtomicReference<HttpURLConnection?>()
         val future = executor.submit {
@@ -46,7 +48,20 @@ class NetworkPortalSession(private val network: Network, private val ssid: Strin
                 c.setRequestProperty("Cache-Control", "no-store")
                 c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 16; Mobile) SZCUConnect/0.1")
                 if (PortalProtocol.trusted(url)) c.setRequestProperty("Referer", PortalProtocol.ROOT)
+                val cookieHeaders = cookies.headers(url)
+                cookieHeaders.forEach { (name, values) -> c.setRequestProperty(name, values.joinToString("; ")) }
                 val code = c.responseCode
+                cookies.receive(url, c.headerFields)
+                if (PortalProtocol.trusted(url)) {
+                    val kind = when {
+                        url.contains("a=page_type_data") -> "INIT"
+                        url.contains("a=online_list") -> "STATUS"
+                        url.contains("a=logout") -> "LOGOUT"
+                        url.contains("a=login") -> "LOGIN"
+                        else -> "PAGE"
+                    }
+                    android.util.Log.i("SZCU_PROTOCOL", "$kind http=$code cookie=${cookieHeaders.values.flatten().any { it.contains("PHPSESSID=") }} changed=${cookieHeaders != cookies.headers(url)}")
+                }
                 val body = if (code == 200) {
                     val bytes = c.inputStream.use { input ->
                         val out = ByteArrayOutputStream()
@@ -130,11 +145,16 @@ class NetworkPortalSession(private val network: Network, private val ssid: Strin
         throw PortalException("注销请求已发送，但校园网页仍显示在线；已停止提交新账号，请稍后重试")
     }
 
-    override suspend fun readContext(): PortalContext = loadContext()
+    override suspend fun readContext(): PortalContext {
+        // Equivalent to the school's Return button after logout; fetch fresh form parameters.
+        val ctx = loadContext(PortalProtocol.RETURN)
+        if (pageAuthenticated) throw PortalException("返回后校园网页仍显示在线，已停止提交新账号，请重新连接")
+        return ctx
+    }
 
-    private suspend fun loadContext(): PortalContext = withContext(Dispatchers.IO) {
+    private suspend fun loadContext(entry: String = PortalProtocol.ROOT): PortalContext = withContext(Dispatchers.IO) {
         checkNetwork()
-        val root = get(PortalProtocol.ROOT)
+        val root = get(entry)
         if (root.code != 200) throw PortalException("校园认证入口不可用，请打开登录页检查")
         pageAuthenticated = SessionProtocol.isSuccessPage(root.body)
         val ip = wifi.ip(network) ?: throw PortalException("Wi-Fi 尚未获得 IPv4 地址")
@@ -142,6 +162,13 @@ class NetworkPortalSession(private val network: Network, private val ssid: Strin
         val bootstrap = get(PortalProtocol.ROOT + "a41.js")
         if (bootstrap.code != 200) throw PortalException("无法读取认证脚本，请稍后重试")
         val preliminary = PortalProtocol.parseContext(root.body, ip, bootstrap.body)
+        if (!portalInitialized) {
+            val callback = "dr" + Random.nextInt(1000, 999999)
+            val init = get("http://172.16.8.22:801/eportal/?c=Portal&a=page_type_data&callback=$callback&v=${Random.nextInt(500, 10500)}")
+            if (init.code != 200 || !PortalProtocol.parseReply(init.body, callback).success)
+                throw PortalException("无法初始化校园网页会话，请稍后重试")
+            portalInitialized = true
+        }
         val version = PortalProtocol.literal(root.body, "fileVersion") ?: throw PortalException("认证页面缺少模板版本，请手动登录")
         if (!version.matches(Regex("[0-9]+"))) throw PortalException("认证模板版本异常")
         suspend fun script(path: String): String {

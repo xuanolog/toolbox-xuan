@@ -38,8 +38,10 @@ class ConnectionEngineTest {
     @Test fun differentOrUnknownAccountLogsOutThenReadsFreshContext() = runTest {
         for (account in listOf(null, "other@telecom", "student0001@unicom")) {
             val fake = FakeSession().apply { state = CampusSession(true, account) }
-            ConnectionEngine().run(profile, fake) {}
+            val stages = mutableListOf<Stage>()
+            ConnectionEngine().run(profile, fake) { stages += it.stage }
             assertEquals(listOf("inspect", "logout", "inspect", "context", "login", "verify"), fake.events)
+            assertEquals(listOf(Stage.SESSION, Stage.LOGOUT, Stage.RETURNING, Stage.LOGIN, Stage.VERIFYING, Stage.CONNECTED), stages)
         }
     }
     @Test fun unsuccessfulOrUnconfirmedLogoutNeverSubmits() = runTest {

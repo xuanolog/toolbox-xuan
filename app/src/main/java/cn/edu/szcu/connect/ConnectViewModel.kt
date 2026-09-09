@@ -82,10 +82,13 @@ class ConnectViewModel(app: Application) : AndroidViewModel(app) {
                 if (network != null && wifi.ip(network) == null) network = wifi.await(profile.ssid, 15000)
                 if (network == null) throw PortalException("等待 Wi-Fi 或地址分配超时。请确认热点在附近，并在系统 WLAN 中选择 ${profile.ssid}")
                 ConnectionEngine().run(profile, NetworkPortalSession(network, profile.ssid, wifi)) { progress ->
+                    // Stage names only: no account, password, cookie, server response or request URL.
+                    android.util.Log.i("SZCU_FLOW", progress.stage.name)
                     mutable.update { it.copy(status = progress) }
                 }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
+                android.util.Log.i("SZCU_FLOW", "FAILED " + e.javaClass.simpleName)
                 val message = when (e) {
                     is PortalException -> e.message ?: "认证未完成"
                     is SocketTimeoutException -> "校园网请求超时，请检查 Wi-Fi 后重试"

@@ -4,6 +4,39 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SessionProtocolTest {
+    @Test fun logoutSerializationMatchesCapturedBrowserRequest() {
+        val query = java.net.URI(SessionProtocol.logoutUrl(PortalContext("192.0.2.9"), "dr1001", 789)).rawQuery
+        assertEquals("c=Portal&a=logout&callback=dr1001&login_method=1&user_account=drcom&user_password=123&ac_logout=1&register_mode=1&wlan_user_ip=192.0.2.9&wlan_user_ipv6=&wlan_vlan_id=1&wlan_user_mac=000000000000&wlan_ac_ip=&wlan_ac_name=&jsVersion=3.3.3&v=789", query)
+    }
+
+    private fun controllerPage(kind: Int) = """
+        <!--Dr.COMWebLoginID_$kind.htm-->
+        <html><head><title>注销页</title></head><body>
+        <script>v4ip='192.0.2.9';uid='student0001';authsuccess='Dr.COMWebLoginID_3.htm';</script>
+        <script src="a41.js?version=123"></script><script>
+        page.run($kind);
+        </script></body></html>
+    """.trimIndent()
+
+    @Test fun actualControllerLoggedInPageParsesWithoutLoginOnlyFields() {
+        val html = controllerPage(1)
+        assertTrue(SessionProtocol.isSuccessPage(html))
+        assertFalse(SessionProtocol.isLogoutPage(html))
+        assertEquals("192.0.2.9", PortalProtocol.parseContext(html, "192.0.2.9").ip)
+        assertEquals(CampusSession(true), SessionProtocol.resolveStatus(CampusSession(false), SessionProtocol.isSuccessPage(html)))
+    }
+    @Test fun controllerLogoutPageIsNotAuthenticatedButHasFreshContext() {
+        val html = controllerPage(2)
+        assertFalse(SessionProtocol.isSuccessPage(html))
+        assertTrue(SessionProtocol.isLogoutPage(html))
+        assertEquals("192.0.2.9", PortalProtocol.parseContext(html, "192.0.2.9").ip)
+    }
+    @Test fun genericSuccessSettingAndWrongRunCannotImpersonateLoggedInPage() {
+        assertFalse(SessionProtocol.isSuccessPage(controllerPage(1).replace("page.run(1);", "page.run(2);")))
+        assertFalse(SessionProtocol.isSuccessPage(controllerPage(1).replace("<!--Dr.COMWebLoginID_1.htm-->", "")))
+        try { PortalProtocol.parseContext(controllerPage(1), "192.0.2.8"); fail() } catch (_: PortalException) {}
+    }
+
     @Test fun successPageOverridesIncorrectOfflineRadiusReply() {
         val merged = SessionProtocol.resolveStatus(CampusSession(false), true)
         assertTrue(merged.authenticated); assertNull(merged.account)

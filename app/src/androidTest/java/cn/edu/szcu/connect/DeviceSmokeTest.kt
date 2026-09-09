@@ -12,6 +12,72 @@ import java.security.KeyStore
 
 @RunWith(AndroidJUnit4::class)
 class DeviceSmokeTest {
+    /** Read-only comparison of cookie continuity across native request headers. */
+    @Test fun cookieContinuityDiagnostic() = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("cookieProbe") == "true")
+        val wifi = WifiConnector(InstrumentationRegistry.getInstrumentation().targetContext)
+        try {
+            wifi.refresh()
+            val network = wifi.await("SZCU-313-5G", 30000) ?: error("Wi-Fi unavailable")
+            for (customHeaders in listOf(false, true)) {
+                val cookies = PortalCookies()
+                repeat(2) { step ->
+                    val url = "http://172.16.8.22:801/eportal/?c=Portal&a=page_type_data&callback=dr1000"
+                    val c = network.openConnection(java.net.URL(url), java.net.Proxy.NO_PROXY) as java.net.HttpURLConnection
+                    try {
+                        c.connectTimeout = 5000; c.readTimeout = 5000; c.instanceFollowRedirects = false; c.useCaches = false
+                        if (customHeaders) {
+                            c.setRequestProperty("Cache-Control", "no-store")
+                            c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 16; Mobile) SZCUConnect/0.1")
+                            c.setRequestProperty("Referer", PortalProtocol.ROOT)
+                        }
+                        val before = cookies.headers(url)
+                        before.forEach { (k, v) -> c.setRequestProperty(k, v.joinToString("; ")) }
+                        val code = c.responseCode
+                        cookies.receive(url, c.headerFields)
+                        c.inputStream.use { it.readBytes() }
+                        InstrumentationRegistry.getInstrumentation().sendStatus(0, android.os.Bundle().apply {
+                            putString("stream", "COOKIE_CHECK customHeaders=$customHeaders step=$step http=$code changed=${before != cookies.headers(url)}\n")
+                        })
+                    } finally { c.disconnect() }
+                }
+            }
+        } finally { wifi.close() }
+    }
+
+    @Test fun logoutResponseDiagnostic() = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("logoutDiagnostic") == "true")
+        val withBootstrap = InstrumentationRegistry.getArguments().getString("cookieBootstrap") == "true"
+        val cookies = java.net.CookieManager()
+        val wifi = WifiConnector(InstrumentationRegistry.getInstrumentation().targetContext)
+        try {
+            wifi.refresh()
+            val network = wifi.await("SZCU-313-5G", 30000) ?: error("Wi-Fi unavailable")
+            fun get(url: String): String {
+                val c = network.openConnection(java.net.URL(url), java.net.Proxy.NO_PROXY) as java.net.HttpURLConnection
+                try {
+                    c.connectTimeout = 5000; c.readTimeout = 5000; c.instanceFollowRedirects = false; c.useCaches = false
+                    if (withBootstrap) cookies.get(java.net.URI(url), emptyMap()).forEach { (k, v) -> c.setRequestProperty(k, v.joinToString("; ")) }
+                    c.responseCode
+                    if (withBootstrap) cookies.put(java.net.URI(url), c.headerFields)
+                    return PortalEncoding.decode(c.inputStream.use { it.readBytes() }, c.contentType, true)
+                } finally { c.disconnect() }
+            }
+            val root = get(PortalProtocol.ROOT)
+            val ctx = PortalProtocol.parseContext(root, wifi.ip(network)!!, get(PortalProtocol.ROOT + "a41.js"))
+            if (withBootstrap) get("http://172.16.8.22:801/eportal/?c=Portal&a=page_type_data&callback=dr1000")
+            if (InstrumentationRegistry.getArguments().getString("statusBefore") == "true")
+                get(SessionProtocol.statusUrl(ctx, "dr1002", 788))
+            val body = get(SessionProtocol.logoutUrl(ctx, "dr1001", 789))
+            val obj = com.google.gson.JsonParser.parseString(body.substringAfter('(').substringBeforeLast(')')).asJsonObject
+            val msg = obj.get("msg")?.asString.orEmpty()
+            val safeMessage = msg.takeIf { it.length < 100 && it.matches(Regex("[\\p{IsHan}，。；：！、（）\\s]+")) } ?: "<redacted>"
+            InstrumentationRegistry.getInstrumentation().sendStatus(0, android.os.Bundle().apply {
+                putString("stream", "LOGOUT_RESPONSE success=${obj.get("result")?.asString in listOf("1", "ok")} zeroMac=${ctx.mac == "000000000000"} cookieBootstrap=$withBootstrap cookieCount=${cookies.cookieStore.cookies.size} message=$safeMessage\n")
+            })
+        } finally { wifi.close() }
+    }
+
     /** Opt-in controller check. Logs out once, never reads saved credentials or submits login. */
     @Test fun logoutControllerCheck() = runBlocking {
         assumeTrue(InstrumentationRegistry.getArguments().getString("logoutProbe") == "true")
@@ -23,6 +89,10 @@ class DeviceSmokeTest {
             session.inspect() // Fetch only terminal context; the school's online list may be empty while online.
             session.logout()
             assertFalse("Controller must show offline after logout", session.inspect().authenticated)
+            assertEquals(wifi.ip(network), session.readContext().ip)
+            InstrumentationRegistry.getInstrumentation().sendStatus(0, android.os.Bundle().apply {
+                putString("stream", "LOGOUT_CHECK confirmedOffline=true returnedToLogin=true\n")
+            })
         } finally { wifi.close() }
     }
 

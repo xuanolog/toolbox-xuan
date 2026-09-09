@@ -1,5 +1,19 @@
 # 校园网认证适配依据
 
+## v0.1.3：实际已登录页与 PHP 会话
+
+用户提供的五张流程截图及当天前台 Chrome 调试确认：实际根入口已登录响应使用 `<!--Dr.COMWebLoginID_1.htm-->`，内联脚本调用 `page.run(1)`，页面标题为“注销页”，终端地址来自 `v4ip`。`a41.js` 的 `page.run` 将 1 映射为 `mobile_31`（已登录）、2 映射为 `mobile_32`（注销结果）。因此不能只接受登录表单的 `v4serip/v46ip` 或另一种 `_3.htm` 标记。新版结合真实注释、脚本调用和 `a41.js` 识别这两类页面，并继续校验本次 Wi-Fi IP。
+
+前台实际函数仍为 `wc()` → `Boxy.confirm` → `exit()` → `logout.init()` → `logout_portal()`；实际 `acLogout=1`、`registerMode=1`、`loginMethod=1`，MAC 为零值哨兵。浏览器持有 HttpOnly `PHPSESSID`。对照探测：不携带会话时服务器返回“注销失败”；按网页先请求 `page_type_data` 建立新 Cookie 会话，再携带该会话提交相同注销参数，服务器返回“注销成功”。未复制浏览器 Cookie 值，也未读取个人密码。
+
+后续复查中，相同最小流程和正式流程均再次注销失败；Cookie 连续性正常，隔离在线查询会话也未解决问题。因此上述单次成功不能证明故障由缺少 Cookie 导致，完整注销适配尚未通过验收。
+
+正式传输层新增单次连接操作范围的 CookieManager；先访问 `GET http://172.16.8.22:801/eportal/?c=Portal&a=page_type_data` 初始化会话（严格解析 JSONP），保留服务器 Set-Cookie 并用于后续学校请求。Cookie 不写入磁盘、不安装全局 CookieHandler，不带给百度或其他主机/端口。
+
+注销确认后，正式登录参数读取请求 `http://172.16.8.22/?isReback=1`，对应网页“返回”；若仍是已登录页，则停止新账号提交。界面阶段为“正在注销 → 返回登录页 → 正在登录”。`SZCU_FLOW` 日志仅包含阶段枚举和异常类名，不包含账号、密码、Cookie、原始响应或完整 URL。
+
+以下各版本段落保留调查历史，已登录页识别和会话 Cookie 的处理以本节为准。
+
 ## v0.1.2 修正
 
 实机出现 RADIUS `online_list` 和内核 `chkstatus` 均返回离线，但目标 Wi-Fi 的百度 HTTPS 请求可达的情况。在线列表不能作为唯一登录状态来源；页面脚本中的 `authsuccess='Dr.COMWebLoginID_3.htm'` 也只是通用配置，不能因为字符串出现就认为当前页面已登录。仅完整 HTML 成功页注释可作为补充证据。

@@ -5,17 +5,34 @@ import com.google.gson.JsonParser
 import java.net.URLEncoder
 
 object SessionProtocol {
-    fun isSuccessPage(html: String): Boolean = Regex("<!--\\s*Dr\\.COMWebLoginID_3\\.htm\\s*-->").containsMatchIn(html)
+    private fun hasRunPage(html: String, kind: Int): Boolean {
+        val doc = org.jsoup.Jsoup.parse(html)
+        val marker = Regex("<!--\\s*Dr\\.COMWebLoginID_${kind}\\.htm\\s*-->").containsMatchIn(html)
+        return marker && html.contains("a41.js") && doc.select("script").any {
+            Regex("(?m)^\\s*page\\.run\\(\\s*$kind\\s*\\)\\s*;?").containsMatchIn(it.data())
+        }
+    }
+    fun isSuccessPage(html: String): Boolean = hasRunPage(html, 1) ||
+        Regex("<!--\\s*Dr\\.COMWebLoginID_3\\.htm\\s*-->").containsMatchIn(html)
+    fun isLogoutPage(html: String): Boolean = hasRunPage(html, 2)
     fun resolveStatus(status: CampusSession, successPage: Boolean): CampusSession =
         if (successPage && !status.authenticated) CampusSession(true) else status
 
     private fun url(action: String, ctx: PortalContext, callback: String, nonce: Int, logout: Boolean): String {
         require(callback.matches(Regex("dr[0-9]+")))
-        val params = linkedMapOf("callback" to callback, "user_account" to "drcom", "user_password" to "123",
-            "wlan_user_mac" to ctx.mac, "wlan_user_ip" to ctx.ip, "jsVersion" to ctx.jsVersion, "v" to nonce.toString())
-        if (logout) params.putAll(mapOf("login_method" to "1", "ac_logout" to "1", "register_mode" to "1",
-            "wlan_user_ipv6" to ctx.ipv6, "wlan_vlan_id" to ctx.vlan, "wlan_ac_ip" to ctx.acIp, "wlan_ac_name" to ctx.acName))
-        else params["curr_user_ip"] = ctx.ip
+        val params = linkedMapOf("callback" to callback)
+        if (logout) params["login_method"] = "1"
+        params.putAll(linkedMapOf("user_account" to "drcom", "user_password" to "123"))
+        if (logout) {
+            params.putAll(linkedMapOf("ac_logout" to "1", "register_mode" to "1",
+                "wlan_user_ip" to ctx.ip, "wlan_user_ipv6" to ctx.ipv6, "wlan_vlan_id" to ctx.vlan,
+                "wlan_user_mac" to ctx.mac, "wlan_ac_ip" to ctx.acIp, "wlan_ac_name" to ctx.acName))
+        } else {
+            params.putAll(linkedMapOf("wlan_user_mac" to ctx.mac, "wlan_user_ip" to ctx.ip, "curr_user_ip" to ctx.ip))
+        }
+        // Match the captured browser serializer: callback first, cache nonce last.
+        params["jsVersion"] = ctx.jsVersion
+        params["v"] = nonce.toString()
         return "http://172.16.8.22:801/eportal/?c=Portal&a=$action&" + params.entries.joinToString("&") {
             it.key + "=" + URLEncoder.encode(it.value, "UTF-8").replace("+", "%20")
         }

@@ -5,7 +5,7 @@ import kotlinx.coroutines.ensureActive
 
 enum class Stage(val label: String) {
     IDLE("准备连接"), WAITING_WIFI("等待 Wi-Fi"), READING("读取认证信息"),
-    SESSION("检查当前账号"), LOGOUT("正在注销"), LOGIN("正在登录"), VERIFYING("检查网络"), CONNECTED("连接成功"),
+    SESSION("检查当前账号"), LOGOUT("正在注销"), RETURNING("返回登录页"), LOGIN("正在登录"), VERIFYING("检查网络"), CONNECTED("连接成功"),
     CAMPUS("内网认证成功"), LIMITED("认证成功，外网未确认"), ALREADY("当前 Wi-Fi 已联网"),
     FAILED("连接未完成"), CANCELLED("已取消")
 }
@@ -50,7 +50,8 @@ class ConnectionEngine {
         }
         if (!sameAccount) {
             currentCoroutineContext().ensureActive()
-            status(Stage.READING, "读取本次 Wi-Fi 的认证参数")
+            if (possiblyOnline) status(Stage.RETURNING, "注销已确认，正在返回登录页并读取新账号认证参数")
+            else status(Stage.READING, "读取本次 Wi-Fi 的认证参数")
             val ctx = session.readContext()
             currentCoroutineContext().ensureActive()
             session.checkNetwork()

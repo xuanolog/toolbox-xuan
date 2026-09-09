@@ -15,6 +15,7 @@ data class PortalReply(val success: Boolean, val message: String)
 object PortalProtocol {
     const val HOST = "172.16.8.22"
     const val ROOT = "http://172.16.8.22/"
+    const val RETURN = "http://172.16.8.22/?isReback=1"
     const val ENDPOINT = "http://172.16.8.22:801/eportal/?c=Portal&a=login"
 
     fun trusted(url: String): Boolean = runCatching {
@@ -28,10 +29,10 @@ object PortalProtocol {
             .find(source)?.groupValues?.get(1)?.trim()
 
     fun parseContext(html: String, wifiIp: String, scripts: String = ""): PortalContext {
-        val successPage = Regex("<!--\\s*Dr\\.COMWebLoginID_3\\.htm\\s*-->").containsMatchIn(html)
-        if ((!successPage && literal(html, "v4serip") != HOST) || !html.contains("a41.js"))
+        val sessionPage = SessionProtocol.isSuccessPage(html) || SessionProtocol.isLogoutPage(html)
+        if ((!sessionPage && literal(html, "v4serip") != HOST) || !html.contains("a41.js"))
             throw PortalException("认证页面已变化，请打开校园网登录页手动认证")
-        val ip = literal(html, "v46ip") ?: literal(html, "ss5") ?: (if (successPage) literal(html, "v4ip") else null)
+        val ip = literal(html, "v46ip") ?: literal(html, "ss5") ?: (if (sessionPage) literal(html, "v4ip") else null)
             ?: throw PortalException("认证页未提供手机 IP，请重新连接校园 Wi-Fi")
         if (ip != wifiIp || !ip.matches(Regex("(?:[0-9]{1,3}\\.){3}[0-9]{1,3}")))
             throw PortalException("认证页 IP 与当前 Wi-Fi 不一致，请重新连接后重试")
