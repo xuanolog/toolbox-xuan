@@ -17,7 +17,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 首次连接可能需要精确位置、附近 Wi-Fi 权限以及系统连接确认。只有在系统确认连到目标 SSID 后才发送认证请求。
 
-开发阶段安装调试 APK；最终版本和实测范围以 `docs/TESTING.md` 为准。仅本地 Git 管理，不自动创建远程仓库。
+当前个人使用版本 `v0.1.0`，已在小米 Android 16 / HyperOS 3.0 完成中国电信真实登录。交付为调试签名 APK；其他运营商及完整兼容矩阵以 `docs/TESTING.md` 为准。仅本地 Git 管理，不自动创建远程仓库。
 
 - [安装与使用](docs/USAGE.md)
 - [测试记录与待验收项目](docs/TESTING.md)
