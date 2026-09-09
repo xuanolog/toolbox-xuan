@@ -11,7 +11,6 @@ import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.Proxy
 import java.net.URL
-import java.nio.charset.Charset
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.resume
@@ -56,10 +55,7 @@ class NetworkPortalSession(private val network: Network, private val ssid: Strin
                         }
                         out.toByteArray()
                     }
-                    val declared = Regex("charset=([A-Za-z0-9_-]+)", RegexOption.IGNORE_CASE).find(c.contentType.orEmpty())?.groupValues?.get(1)
-                    val meta = Regex("charset=[\"']?([A-Za-z0-9_-]+)", RegexOption.IGNORE_CASE).find(String(bytes.take(2048).toByteArray(), Charsets.ISO_8859_1))?.groupValues?.get(1)
-                    val charset = runCatching { Charset.forName(declared ?: meta ?: "UTF-8") }.getOrDefault(Charsets.UTF_8)
-                    String(bytes, charset)
+                    PortalEncoding.decode(bytes, c.contentType, PortalProtocol.trusted(url))
                 } else ""
                 if (continuation.isActive) continuation.resume(Response(code, body))
             } catch (e: Exception) {
