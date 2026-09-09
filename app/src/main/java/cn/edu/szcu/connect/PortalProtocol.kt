@@ -6,10 +6,9 @@ import java.net.URI
 import java.net.URLEncoder
 
 open class PortalException(message: String) : Exception(message)
-class ExistingPortalSession : PortalException("校园网已有认证会话")
 
 data class PortalContext(val ip: String, val ipv6: String = "", val mac: String = "000000000000",
-    val acIp: String = "", val acName: String = "", val jsVersion: String = "3.3.3")
+    val acIp: String = "", val acName: String = "", val jsVersion: String = "3.3.3", val vlan: String = "1")
 
 data class PortalReply(val success: Boolean, val message: String)
 
@@ -29,9 +28,10 @@ object PortalProtocol {
             .find(source)?.groupValues?.get(1)?.trim()
 
     fun parseContext(html: String, wifiIp: String, scripts: String = ""): PortalContext {
-        if (!html.contains("v4serip") || literal(html, "v4serip") != HOST || !html.contains("a41.js"))
+        val successPage = Regex("<!--\\s*Dr\\.COMWebLoginID_3\\.htm\\s*-->").containsMatchIn(html)
+        if ((!successPage && literal(html, "v4serip") != HOST) || !html.contains("a41.js"))
             throw PortalException("认证页面已变化，请打开校园网登录页手动认证")
-        val ip = literal(html, "v46ip") ?: literal(html, "ss5")
+        val ip = literal(html, "v46ip") ?: literal(html, "ss5") ?: (if (successPage) literal(html, "v4ip") else null)
             ?: throw PortalException("认证页未提供手机 IP，请重新连接校园 Wi-Fi")
         if (ip != wifiIp || !ip.matches(Regex("(?:[0-9]{1,3}\\.){3}[0-9]{1,3}")))
             throw PortalException("认证页 IP 与当前 Wi-Fi 不一致，请重新连接后重试")
@@ -44,7 +44,9 @@ object PortalProtocol {
         if (ipv6.isNotEmpty()) throw PortalException("检测到不同的 IPv6 认证模式，请手动登录")
         val mac = (literal(html, "ss4") ?: literal(html, "olmac") ?: "000000000000").replace(":", "").replace("-", "")
         if (!mac.matches(Regex("[0-9A-Fa-f]{12}"))) throw PortalException("认证页终端信息异常，请手动登录")
-        return PortalContext(ip = ip, mac = mac, jsVersion = version)
+        val vlan = literal(html, "vlanid") ?: Regex("\\bvlanid\\s*=\\s*(\\d+)").find(html)?.groupValues?.get(1) ?: "1"
+        if (!vlan.matches(Regex("[0-9]{1,4}"))) throw PortalException("认证页 VLAN 参数异常")
+        return PortalContext(ip = ip, mac = mac, jsVersion = version, vlan = vlan)
     }
 
     fun account(profile: Profile): String = ",1," + profile.account + profile.carrier.suffix

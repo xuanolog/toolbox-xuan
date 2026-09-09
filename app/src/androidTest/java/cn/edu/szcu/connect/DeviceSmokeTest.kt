@@ -12,6 +12,25 @@ import java.security.KeyStore
 
 @RunWith(AndroidJUnit4::class)
 class DeviceSmokeTest {
+    /** Emits only booleans: no profile contents, account, IP, MAC, URL or device identifiers. */
+    @Test fun campusSessionReadOnly() = runBlocking {
+        val args = InstrumentationRegistry.getArguments()
+        assumeTrue("Explicit session probe not requested", args.getString("sessionProbe") == "true")
+        val wifi = WifiConnector(InstrumentationRegistry.getInstrumentation().targetContext)
+        try {
+            wifi.refresh()
+            val network = wifi.await("SZCU-313-5G", 30000) ?: error("Target Wi-Fi unavailable or permission missing")
+            val session = NetworkPortalSession(network, "SZCU-313-5G", wifi)
+            val state = session.inspect()
+            val reachable = session.online()
+            val defaultCaps = wifi.connectivity.getNetworkCapabilities(wifi.connectivity.activeNetwork)
+            val result = android.os.Bundle().apply {
+                putString("stream", "SESSION_PROBE authenticated=${state.authenticated} identityAvailable=${state.account != null} wifiProbe=$reachable wifiValidated=${wifi.validated(network)} defaultCellular=${defaultCaps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true}\n")
+            }
+            InstrumentationRegistry.getInstrumentation().sendStatus(0, result)
+        } finally { wifi.close() }
+    }
+
     @Test fun keystoreAndMultipleProfilesPersistWithoutPlaintext() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val fileName = "smoke-test.vault"

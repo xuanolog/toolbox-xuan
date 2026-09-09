@@ -19,8 +19,11 @@ import kotlin.random.Random
 
 class NetworkPortalSession(private val network: Network, private val ssid: String, private val wifi: WifiConnector) : PortalSession {
     companion object { private val executor = Executors.newFixedThreadPool(3) }
+    private val initialIp = wifi.ip(network) ?: throw PortalException("Wi-Fi 尚未获得 IPv4 地址")
+    private var sessionContext: PortalContext? = null
     override fun checkNetwork() {
         if (!wifi.matches(network, ssid)) throw PortalException("目标 Wi-Fi 已断开或发生切换，已停止认证")
+        if (wifi.ip(network) != initialIp) throw PortalException("Wi-Fi 地址发生变化，已停止认证，请重试")
     }
     private data class Response(val code: Int, val body: String)
 
@@ -76,13 +79,53 @@ class NetworkPortalSession(private val network: Network, private val ssid: Strin
         return false
     }
 
-    override suspend fun readContext(): PortalContext = withContext(Dispatchers.IO) {
+    override suspend fun verify(): Boolean = NetworkVerifier().verify(
+        probe = ::online,
+        authenticated = {
+            try { inspect().authenticated }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { checkNetwork(); false }
+        },
+        validated = { wifi.validated(network) },
+        reevaluate = { wifi.reevaluate(network, it) },
+        checkNetwork = ::checkNetwork,
+    )
+
+    override suspend fun inspect(): CampusSession {
+        val ctx = loadContext()
+        val callback = "dr" + Random.nextInt(1000, 999999)
+        val response = get(SessionProtocol.statusUrl(ctx, callback, Random.nextInt(500, 10500)))
+        if (response.code != 200) throw PortalException("校园会话查询失败，已停止操作")
+        checkNetwork()
+        sessionContext = ctx
+        return SessionProtocol.parseStatus(response.body, callback, ctx.ip)
+    }
+
+    override suspend fun logout() {
+        currentCoroutineContext().ensureActive()
+        checkNetwork()
+        val ctx = sessionContext ?: throw PortalException("请先检查当前校园会话")
+        val actions = get(PortalProtocol.ROOT + "a42.js")
+        val bootstrap = get(PortalProtocol.ROOT + "a41.js")
+        if (actions.code != 200 || bootstrap.code != 200) throw PortalException("无法核实注销协议，已停止操作")
+        SessionProtocol.validateScripts(bootstrap.body, actions.body)
+        currentCoroutineContext().ensureActive()
+        val callback = "dr" + Random.nextInt(1000, 999999)
+        val response = get(SessionProtocol.logoutUrl(ctx, callback, Random.nextInt(500, 10500)))
+        if (response.code != 200 || !PortalProtocol.parseReply(response.body, callback).success)
+            throw PortalException("校园注销未成功，已停止登录，请检查校园网页")
+        sessionContext = null
+        // Give the access controller a bounded interval to apply logout before checking it.
+        kotlinx.coroutines.delay(1000)
+    }
+
+    override suspend fun readContext(): PortalContext = loadContext()
+
+    private suspend fun loadContext(): PortalContext = withContext(Dispatchers.IO) {
         checkNetwork()
         val root = get(PortalProtocol.ROOT)
         if (root.code != 200) throw PortalException("校园认证入口不可用，请打开登录页检查")
-        val title = org.jsoup.Jsoup.parse(root.body).title()
-        if (title.contains("登录成功") || Regex("<!--\\s*Dr\\.COMWebLoginID_3\\.htm\\s*-->").containsMatchIn(root.body))
-            throw ExistingPortalSession()
+        // The online-list query decides session state; a success-page shell can outlive logout.
         val ip = wifi.ip(network) ?: throw PortalException("Wi-Fi 尚未获得 IPv4 地址")
         // Version is a protocol version, not the cache-busting timestamp in fileVersion.
         val bootstrap = get(PortalProtocol.ROOT + "a41.js")

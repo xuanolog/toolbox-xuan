@@ -26,14 +26,14 @@ class WifiConnector(context: Context) {
 
     @SuppressLint("MissingPermission")
     fun refresh() {
-        callback?.let { runCatching { connectivity.unregisterNetworkCallback(it) } }
-        seen.clear()
+        // Returning from the system Wi-Fi panel must not clear an in-flight network's identity.
+        if (callback != null) { publish(); return }
         val flags = if (Build.VERSION.SDK_INT >= 31) ConnectivityManager.NetworkCallback.FLAG_INCLUDE_LOCATION_INFO else 0
         callback = if (Build.VERSION.SDK_INT >= 31) createCallback(flags) else createLegacyCallback()
         try {
             connectivity.registerNetworkCallback(NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(), callback!!)
             publish()
-        } catch (_: SecurityException) { current.value = "需要 Wi-Fi 权限" }
+        } catch (_: SecurityException) { callback = null; current.value = "需要 Wi-Fi 权限" }
     }
     @androidx.annotation.RequiresApi(31)
     private fun createCallback(flags: Int) = object : ConnectivityManager.NetworkCallback(flags) {
@@ -46,7 +46,7 @@ class WifiConnector(context: Context) {
     }
     private fun update(network: Network, caps: NetworkCapabilities) {
         val name = clean((caps.transportInfo as? WifiInfo)?.ssid)
-        if (name != null) seen[network] = name
+        if (name != null) seen[network] = name else seen.remove(network)
         publish()
     }
     @SuppressLint("MissingPermission")
@@ -68,7 +68,20 @@ class WifiConnector(context: Context) {
     }
     fun ip(network: Network): String? = connectivity.getLinkProperties(network)?.linkAddresses
         ?.firstOrNull { it.address is Inet4Address }?.address?.hostAddress
-    fun matches(network: Network, ssid: String) = find(ssid) == network
+    fun matches(network: Network, ssid: String): Boolean {
+        val networks = wifiNetworks()
+        return network in networks && (seen[network] == ssid ||
+            (networks.size == 1 && legacySsid() == ssid))
+    }
+    fun validated(network: Network): Boolean {
+        val caps = connectivity.getNetworkCapabilities(network) ?: return false
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) &&
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) &&
+            !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_CAPTIVE_PORTAL)
+    }
+    fun reevaluate(network: Network, reachable: Boolean) {
+        connectivity.reportNetworkConnectivity(network, reachable)
+    }
 
     @SuppressLint("MissingPermission")
     fun suggest(ssid: String) {

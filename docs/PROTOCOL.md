@@ -1,5 +1,17 @@
 # 校园网认证适配依据
 
+## v0.1.1 会话查询与注销
+
+2026-09-09 直接只读下载校园服务器的 `a41.js`、`a42.js`、`3.htm` 与 `WZXY/ip/2/mobile_31.js`，核实模板按钮 `wc()` → 确认后 `exit()` → `logout.init()` → `logout.logout_portal()` → `logout.portal_logout()`。本次设置为 `acLogout=1`、`registerMode=1`、`checkOnlineMethod=1`、`unBindmac=0`；不实现解除 MAC 绑定。
+
+- 状态：`GET http://172.16.8.22:801/eportal/?c=Portal&a=online_list`，使用 `user_account=drcom`、`user_password=123` 两个学校脚本公开占位值，附 `wlan_user_mac`、`wlan_user_ip`、`curr_user_ip`、`jsVersion`、`callback`、`v`。这两个占位值不是个人凭据。
+- 成功查询返回 `result=1` 和 `list`；只取 `online_ip` 与本次 Wi-Fi IPv4 一致的记录，其 `user_account` 用于精确比较账号与运营商后缀。多条匹配或缺少账号时视为身份未知；不能用其他终端的在线记录替代本机。现场只读验证的离线响应为 `result="0", msg="在线数据为空"`；其他错误不能当作离线。
+- 注销：`GET http://172.16.8.22:801/eportal/?c=Portal&a=logout`，公开占位账号密码同上，另附 `login_method=1`、`ac_logout=1`、`register_mode=1`、`wlan_user_ip`、`wlan_user_ipv6`、`wlan_vlan_id`、`wlan_user_mac`、`wlan_ac_ip`、`wlan_ac_name`、`jsVersion`、回调与随机数。每次注销前重新核对公开脚本配置。成功条件与网页一致为 `result=1` 或 `ok`，随后单独查询，确认离线才登录。
+- 成功页使用 `Dr.COMWebLoginID_3.htm` 标记和 `v4ip` 字段，没有登录页的 `v4serip`；新增受该标记约束的解析分支，仍要求 IP 等于目标 Wi-Fi 地址。VLAN 来自页面 `vlanid`，未提供时按现场 `term.init` 默认值 1。
+- 查询、注销、登录与 HTTPS 探测均通过同一 `Network.openConnection`；操作中 IP 或网络变化立即停止。请求不记录完整 URL、不缓存、不自动重定向，不执行服务端 JavaScript。
+
+联网探测不能代替校园会话检查。新版只在校园会话存在、Wi-Fi 专属 HTTPS 探测通过、Android 同一 Wi-Fi 为 VALIDATED 且无 CAPTIVE_PORTAL 时显示外网连接成功。首次探测后调用 `reportNetworkConnectivity` 请求系统复查，最多三轮复查、轮间两秒，不重试密码；查询失败则保持“认证成功，外网未确认”。校园内网不要求外网验证。
+
 2026-09-09 使用用户授权的 ADB 与浏览器调试接口，只读检查 SZCU 登录页的 DOM、运行中的函数源码与公开配置。协议调查阶段没有读取输入框密码或提交认证；实现后由用户在应用内填写账号并完成电信登录。本文不保存手机 IP、MAC、设备序列号或账号。
 
 ## 当前环境

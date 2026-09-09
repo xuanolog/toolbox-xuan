@@ -83,7 +83,8 @@ class ConnectViewModel(app: Application) : AndroidViewModel(app) {
                     actions.send(WifiAction.SaveNetwork(profile.ssid))
                     network = wifi.await(profile.ssid, 90000)
                 }
-                if (network == null) throw PortalException("等待 Wi-Fi 超时。请确认热点在附近，并在系统 WLAN 中选择 ${profile.ssid}")
+                if (network != null && wifi.ip(network) == null) network = wifi.await(profile.ssid, 15000)
+                if (network == null) throw PortalException("等待 Wi-Fi 或地址分配超时。请确认热点在附近，并在系统 WLAN 中选择 ${profile.ssid}")
                 ConnectionEngine().run(profile, NetworkPortalSession(network, profile.ssid, wifi)) { progress ->
                     mutable.update { it.copy(status = progress) }
                 }
