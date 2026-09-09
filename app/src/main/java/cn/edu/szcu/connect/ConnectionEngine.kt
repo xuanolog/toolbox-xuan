@@ -32,7 +32,12 @@ class ConnectionEngine {
         }
         currentCoroutineContext().ensureActive()
         status(Stage.READING, "读取本次 Wi-Fi 的认证参数")
-        val ctx = session.readContext()
+        val ctx = try { session.readContext() } catch (_: ExistingPortalSession) {
+            currentCoroutineContext().ensureActive()
+            session.checkNetwork()
+            status(Stage.ALREADY, "校园网已有认证会话，未提交所选账号；外网访问尚未确认。如需换账号，请先在校园网页退出。")
+            return
+        }
         currentCoroutineContext().ensureActive()
         session.checkNetwork()
         status(Stage.LOGIN, "正在向校园网提交认证，请稍候")

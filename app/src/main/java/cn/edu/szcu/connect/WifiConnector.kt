@@ -35,6 +35,7 @@ class WifiConnector(context: Context) {
             publish()
         } catch (_: SecurityException) { current.value = "需要 Wi-Fi 权限" }
     }
+    @androidx.annotation.RequiresApi(31)
     private fun createCallback(flags: Int) = object : ConnectivityManager.NetworkCallback(flags) {
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) { update(network, caps) }
         override fun onLost(network: Network) { seen.remove(network); publish() }

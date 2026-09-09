@@ -1,8 +1,8 @@
 package cn.edu.szcu.connect
 
-import android.app.Activity
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -24,7 +24,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -236,7 +235,7 @@ private fun maskAccount(account: String) = if (account.length < 5) "••••
     var visible by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val window = (LocalContext.current as Activity).window
+    val window = checkNotNull(LocalActivity.current).window
     DisposableEffect(Unit) {
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         onDispose { window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE); password = "" }

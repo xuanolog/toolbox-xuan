@@ -41,7 +41,7 @@ class NetworkPortalSession(private val network: Network, private val ssid: Strin
                 c.useCaches = false
                 c.setRequestProperty("Cache-Control", "no-store")
                 c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 16; Mobile) SZCUConnect/0.1")
-                c.setRequestProperty("Referer", PortalProtocol.ROOT)
+                if (PortalProtocol.trusted(url)) c.setRequestProperty("Referer", PortalProtocol.ROOT)
                 val code = c.responseCode
                 val body = if (code == 200) {
                     val bytes = c.inputStream.use { input ->
@@ -84,11 +84,26 @@ class NetworkPortalSession(private val network: Network, private val ssid: Strin
         checkNetwork()
         val root = get(PortalProtocol.ROOT)
         if (root.code != 200) throw PortalException("校园认证入口不可用，请打开登录页检查")
+        val title = org.jsoup.Jsoup.parse(root.body).title()
+        if (title.contains("登录成功") || Regex("<!--\\s*Dr\\.COMWebLoginID_3\\.htm\\s*-->").containsMatchIn(root.body))
+            throw ExistingPortalSession()
         val ip = wifi.ip(network) ?: throw PortalException("Wi-Fi 尚未获得 IPv4 地址")
         // Version is a protocol version, not the cache-busting timestamp in fileVersion.
         val bootstrap = get(PortalProtocol.ROOT + "a41.js")
         if (bootstrap.code != 200) throw PortalException("无法读取认证脚本，请稍后重试")
-        PortalProtocol.parseContext(root.body, ip, bootstrap.body)
+        val preliminary = PortalProtocol.parseContext(root.body, ip, bootstrap.body)
+        val version = PortalProtocol.literal(root.body, "fileVersion") ?: throw PortalException("认证页面缺少模板版本，请手动登录")
+        if (!version.matches(Regex("[0-9]+"))) throw PortalException("认证模板版本异常")
+        suspend fun script(path: String): String {
+            val response = get("http://172.16.8.22:801/eportal/extern/WZXY/$path?version=$version")
+            if (response.code != 200) throw PortalException("无法读取校园认证模板，请稍后重试")
+            return response.body
+        }
+        val config = script("config.js")
+        val index = PortalTemplate.index(config, ip)
+        val loginbox = script("ip/$index/loginbox.js")
+        val mobile = script("ip/$index/mobile.js")
+        preliminary.copy(jsVersion = PortalTemplate.validate(bootstrap.body, loginbox, mobile))
     }
 
     override suspend fun authenticate(profile: Profile, ctx: PortalContext): PortalReply {

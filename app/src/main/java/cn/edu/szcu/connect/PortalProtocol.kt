@@ -5,7 +5,8 @@ import org.jsoup.Jsoup
 import java.net.URI
 import java.net.URLEncoder
 
-class PortalException(message: String) : Exception(message)
+open class PortalException(message: String) : Exception(message)
+class ExistingPortalSession : PortalException("校园网已有认证会话")
 
 data class PortalContext(val ip: String, val ipv6: String = "", val mac: String = "000000000000",
     val acIp: String = "", val acName: String = "", val jsVersion: String = "3.3.3")
@@ -24,7 +25,7 @@ object PortalProtocol {
 
     /** Reads literal assignments only. Never evaluates page scripts. */
     fun literal(source: String, name: String): String? =
-        Regex("(?:^|[;\\s,{])" + Regex.escape(name) + "\\s*[:=]\\s*['\"]([^'\"\\r\\n]*)['\"]")
+        Regex("(?<![A-Za-z0-9_$])" + Regex.escape(name) + "\\s*[:=]\\s*['\"]([^'\"\\r\\n]*)['\"]")
             .find(source)?.groupValues?.get(1)?.trim()
 
     fun parseContext(html: String, wifiIp: String, scripts: String = ""): PortalContext {
@@ -37,11 +38,13 @@ object PortalProtocol {
         val doc = Jsoup.parse(html)
         if (doc.select("input[name=captcha]").any { !it.attr("style").contains("display:none") && !it.attr("style").contains("display: none") })
             throw PortalException("认证页需要验证码，请手动登录")
-        // The inspected WZXY portal uses IPv4 and the zero MAC sentinel, not the device's private MAC.
+        // The page supplies the MAC (zero on the inspected portal); never use the phone's factory MAC.
         val version = literal(scripts, "jsVersion") ?: "3.3.3"
         val ipv6 = literal(html, "myv6ip").orEmpty()
         if (ipv6.isNotEmpty()) throw PortalException("检测到不同的 IPv6 认证模式，请手动登录")
-        return PortalContext(ip = ip, jsVersion = version)
+        val mac = (literal(html, "ss4") ?: literal(html, "olmac") ?: "000000000000").replace(":", "").replace("-", "")
+        if (!mac.matches(Regex("[0-9A-Fa-f]{12}"))) throw PortalException("认证页终端信息异常，请手动登录")
+        return PortalContext(ip = ip, mac = mac, jsVersion = version)
     }
 
     fun account(profile: Profile): String = ",1," + profile.account + profile.carrier.suffix
