@@ -44,5 +44,5 @@ cd szcu-connect-android
 
 ## 仓库说明
 
-- `szcu-connect-android/` 由独立仓库 `Android-szcu-network` 以子树合并（subtree）方式整体引入，原提交历史完整保留在本仓库中。
+- `szcu-connect-android/` 由独立仓库 `Android-szcu-network` 以子树合并（subtree）方式整体引入，原提交历史完整保留在本仓库中。上游有新提交后，在本仓库工作副本执行 `git subtree pull --prefix=szcu-connect-android <安卓仓库路径> main` 即可同步，不需要重新导入。
 - 真实密码只在手机应用或浏览器里输入。签名密钥、个人账号、原始页面、日志、APK 以及本地 SDK 配置不进入 Git。
