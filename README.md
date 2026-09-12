@@ -17,7 +17,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 首次连接可能需要精确位置、附近 Wi-Fi 权限以及系统连接确认。只有在系统确认连到目标 SSID 后才发送认证请求。
 
-当前开发交付版本 `v0.1.3`，补齐学校已登录页和注销页解析，按“注销、确认、返回登录页、登录所选配置”连接；通过 Wi-Fi 实际访问百度后显示绿色成功，不添加自动连接建议。`v0.1.0` 已在小米 Android 16 / HyperOS 3.0 完成中国电信真实登录；新版验收状态见测试记录。交付为调试签名 APK；其他运营商及完整兼容矩阵以 `docs/TESTING.md` 为准。仅本地 Git 管理，不自动创建远程仓库。
+当前开发交付版本 `v0.1.3`，补齐学校已登录页和注销页解析，按“注销、确认、返回登录页、登录所选配置”连接；通过 Wi-Fi 实际访问百度后显示绿色成功，不添加自动连接建议。`v0.1.0` 已在小米 Android 16 / HyperOS 3.0 完成中国电信真实登录；新版验收状态见测试记录。交付为调试签名 APK；其他运营商及完整兼容矩阵以 `docs/TESTING.md` 为准。源码已在工具箱仓库 [toolbox-xuan](https://github.com/xuanolog/toolbox-xuan) 的 `szcu-connect-android/` 目录同步发布，本仓库仍是主要开发仓库。
 
 - [安装与使用](docs/USAGE.md)
 - [测试记录与待验收项目](docs/TESTING.md)
