@@ -2,6 +2,8 @@
 
 自动连接校园网，支持多运营商账号配置、断网自动重连等功能。
 
+本扩展是 [toolbox-xuan](../README.md) 仓库中的电脑端工具，手机端见 [szcu-connect-android](../szcu-connect-android/README.md)。
+
 ## 功能特性
 
 - ✅ 自动登录校园网
@@ -14,7 +16,9 @@
 
 ## 安装步骤
 
-### 1. 生成图标
+### 1. 生成图标（可跳过）
+
+仓库中已经包含 `icons/icon16.png`、`icons/icon48.png`、`icons/icon128.png`，需要重新生成时再执行：
 
 1. 用浏览器打开 `create_icons.html` 文件
 2. 图标会自动下载到下载文件夹
@@ -25,7 +29,7 @@
 1. 打开 Chrome 浏览器，地址栏输入 `chrome://extensions/`
 2. 开启右上角的「开发者模式」
 3. 点击「加载已解压的扩展程序」
-4. 选择本项目文件夹
+4. 选择本目录，即仓库根目录下的 `campus-auto-login/`
 
 ## 使用说明
 
@@ -57,7 +61,7 @@
 ## 文件结构
 
 ```
-chromeWZNet/
+campus-auto-login/
 ├── manifest.json      # 扩展配置
 ├── popup.html         # 弹窗界面
 ├── popup.js           # 弹窗逻辑
